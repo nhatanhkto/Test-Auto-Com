@@ -1,0 +1,18 @@
+name: Chay Test Thu
+
+on:
+  workflow_dispatch: # Dòng này cho phép bấm nút chạy bằng tay ngay lập tức
+
+jobs:
+  test-job:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Cai Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.9'
+      - name: Cai thu vien
+        run: pip install -r requirements.txt
+      - name: Chay Code
+        run: python main.py
