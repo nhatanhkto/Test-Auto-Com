@@ -1,0 +1,22 @@
+name: Dang Ky Com Hang Ngay
+
+on:
+  schedule:
+    # Chạy lúc 8:00 sáng VN (tức là 01:00 UTC)
+    # Dấu * * * nghĩa là chạy tất cả các ngày trong tháng/tuần
+    - cron: '0 1 * * *'
+  workflow_dispatch: # Cho phép bấm chạy thủ công để test
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.9'
+      - name: Install Libraries
+        run: pip install -r requirements.txt
+      - name: Run Auto Tool
+        run: python main.py
