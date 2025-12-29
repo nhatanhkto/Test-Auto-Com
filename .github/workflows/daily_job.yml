@@ -9,9 +9,9 @@ jobs:
   run-bot:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4 # Đã nâng cấp lên v4
       - name: Setup Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v5 # Đã nâng cấp lên v5
         with:
           python-version: '3.9'
       - name: Install Libraries
@@ -19,10 +19,10 @@ jobs:
       - name: Run Auto Tool
         run: python main.py
       
-      # --- THÊM ĐOẠN NÀY ĐỂ TẢI ẢNH VỀ ---
+      # --- ĐOẠN NÀY ĐÃ SỬA TỪ v3 SANG v4 ---
       - name: Upload Screenshot
-        if: always() # Luôn chạy dù lỗi hay không
-        uses: actions/upload-artifact@v3
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
           name: bang-chung-chup-man-hinh
           path: evidence.png
