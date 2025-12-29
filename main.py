@@ -10,140 +10,141 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-# --- CẤU HÌNH THÔNG TIN CỦA BẠN ---
+# --- CẤU HÌNH THÔNG TIN ---
 LINK_CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRGdoBQimFR-crsXdoqJmC-bk5PdlR4VYVRSTVGaXncW90ogVvS8zhIjfxDRHnlB3oKHGdXcSvL5IFd/pub?gid=0&single=true&output=csv'
 LINK_FORM = 'https://forms.office.com/r/ZjK2MqRCUw'
 
 MY_NAME = "Vũ Thị Thơm"
 MY_ID = "BVHV00491"
-# ----------------------------------
+# --------------------------
 
 def get_vietnam_time():
-    # Giờ server GitHub là UTC, cộng 7 để ra giờ VN
     utc_now = datetime.now(timezone.utc)
     vn_now = utc_now + timedelta(hours=7)
     return vn_now.strftime("%d/%m/%Y")
 
 def check_schedule():
-    print("--- KIỂM TRA LỊCH TRÌNH ---")
+    print("--- 1. KIỂM TRA LỊCH TRÌNH ---")
     try:
         response = requests.get(LINK_CSV)
         response.encoding = 'utf-8'
         lines = response.text.splitlines()
-        
         today_vn = get_vietnam_time()
         print(f"Hôm nay là: {today_vn}")
-
+        
         reader = csv.DictReader(lines)
         for row in reader:
             if row['Ngay'] == today_vn:
                 status = row['DiLam'].lower().strip()
                 if status == 'x' or status == 'co':
-                    print(f"-> Lịch ghi '{status}'. => CÓ ĐI LÀM.")
+                    print(f"-> Trạng thái '{status}' => CÓ ĐI LÀM.")
                     return True
                 else:
-                    print(f"-> Lịch ghi '{status}'. => NGHỈ.")
+                    print(f"-> Trạng thái '{status}' => NGHỈ.")
                     return False
         
-        print("-> Không thấy ngày hôm nay trong file Excel. Mặc định: NGHỈ.")
+        print("-> Không thấy ngày hôm nay trong lịch. Mặc định: NGHỈ.")
         return False
     except Exception as e:
         print(f"Lỗi đọc lịch: {e}")
         return False
 
 def book_rice():
-    print("--- BẮT ĐẦU ĐĂNG KÝ CƠM ---")
+    print("--- 2. BẮT ĐẦU ĐĂNG KÝ CƠM ---")
     chrome_options = Options()
-    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--headless") # Chạy ngầm
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
-    # Giả lập màn hình lớn để tránh giao diện mobile bị ẩn nút
-    chrome_options.add_argument("--window-size=1920,1080")
+    chrome_options.add_argument("--window-size=1920,1080") # Giả lập màn hình to
 
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
-    wait = WebDriverWait(driver, 20)
+    wait = WebDriverWait(driver, 30) # Chờ tối đa 30s
     
     try:
         driver.get(LINK_FORM)
-        # Chờ form load xong (đợi thẻ body hiện ra)
-        wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+        # Chờ dòng chữ tiêu đề hiện ra để chắc chắn web đã load
+        wait.until(EC.presence_of_element_located((By.XPATH, "//span[contains(text(), 'Nơi làm việc')]")))
         time.sleep(5) 
-        print("Đã vào Form Microsoft.")
+        print("Web đã load xong.")
 
-        # --- 1. Chọn Nơi làm việc: 34 ĐCV ---
-        # Tìm thẻ span chứa chữ "34 ĐCV"
+        # === BƯỚC 1: CHỌN NƠI LÀM VIỆC (34 ĐCV) ===
         try:
             place_btn = wait.until(EC.element_to_be_clickable((By.XPATH, "//span[contains(text(), '34 ĐCV')]")))
             place_btn.click()
-            print("- Đã chọn: 34 ĐCV")
+            print("[OK] Đã chọn: 34 ĐCV")
         except:
-            print("! Lỗi chọn địa điểm, thử tìm chính xác...")
-            driver.find_element(By.XPATH, "//*[text()='34 ĐCV']").click()
-
-        time.sleep(1)
-
-        # --- 2 & 3. Điền Họ tên và Mã NV ---
-        # Tìm tất cả các ô nhập liệu text
-        text_inputs = driver.find_elements(By.XPATH, "//input[@type='text']")
+            print("[!] Thử lại chọn địa điểm...")
+            driver.execute_script("document.evaluate(\"//span[contains(text(), '34 ĐCV')]\", document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue.click();")
         
-        # Microsoft Form thường xếp theo thứ tự câu hỏi
-        # Ô 1: Họ tên, Ô 2: Mã NV (dựa theo ảnh của bạn)
-        if len(text_inputs) >= 2:
-            text_inputs[0].send_keys(MY_NAME)
-            print(f"- Đã điền tên: {MY_NAME}")
-            
-            text_inputs[1].send_keys(MY_ID)
-            print(f"- Đã điền mã: {MY_ID}")
-        else:
-            print("!!! CẢNH BÁO: Không tìm thấy đủ ô nhập liệu.")
+        time.sleep(1)
+
+        # === BƯỚC 2: ĐIỀN HỌ TÊN (Dựa trên video: Câu hỏi số 2) ===
+        # Tìm ô input có aria-label chứa chữ 'Họ tên' (Chính xác nhất)
+        try:
+            name_input = driver.find_element(By.XPATH, "//input[contains(@aria-label, 'Họ tên')]")
+            name_input.send_keys(MY_NAME)
+            print(f"[OK] Đã điền tên: {MY_NAME}")
+        except:
+            # Dự phòng: Tìm div chứa chữ 'Họ tên', rồi tìm input bên trong/gần đó
+            print("(!) Dùng cách dự phòng tìm ô Tên...")
+            name_input = driver.find_element(By.XPATH, "//div[contains(., 'Họ tên')]//input")
+            name_input.send_keys(MY_NAME)
+            print(f"[OK] Đã điền tên (Dự phòng): {MY_NAME}")
+
+        # === BƯỚC 3: ĐIỀN MÃ NV (Dựa trên video: Câu hỏi số 3) ===
+        try:
+            id_input = driver.find_element(By.XPATH, "//input[contains(@aria-label, 'Mã nhân viên')]")
+            id_input.send_keys(MY_ID)
+            print(f"[OK] Đã điền mã: {MY_ID}")
+        except:
+            print("(!) Dùng cách dự phòng tìm ô Mã NV...")
+            id_input = driver.find_element(By.XPATH, "//div[contains(., 'Mã nhân viên')]//input")
+            id_input.send_keys(MY_ID)
+            print(f"[OK] Đã điền mã (Dự phòng): {MY_ID}")
 
         time.sleep(1)
 
-        # --- 4. Chọn Bộ phận: Xquang ---
-        # Vì danh sách dài, cần cuộn xuống hoặc tìm kỹ
+        # === BƯỚC 4: CHỌN BỘ PHẬN (Xquang) ===
         try:
             dept_btn = driver.find_element(By.XPATH, "//span[contains(text(), 'Xquang')]")
-            driver.execute_script("arguments[0].scrollIntoView();", dept_btn) # Cuộn đến nơi
+            driver.execute_script("arguments[0].scrollIntoView();", dept_btn) # Cuộn xuống cho thấy
             time.sleep(1)
             dept_btn.click()
-            print("- Đã chọn: Xquang")
-        except Exception as e:
-            print(f"! Lỗi chọn khoa: {e}")
+            print("[OK] Đã chọn: Xquang")
+        except:
+             print("[ERROR] Không tìm thấy nút Xquang!")
 
-        # --- 5. Đăng ký ăn trưa ---
+        # === BƯỚC 5: ĐĂNG KÝ ĂN TRƯA ===
         try:
+            # Tìm chính xác nút radio 'ăn trưa' (tránh nhầm với tiêu đề)
             lunch_btn = driver.find_element(By.XPATH, "//span[contains(text(), 'ăn trưa')]")
             lunch_btn.click()
-            print("- Đã chọn: Ăn trưa")
+            print("[OK] Đã chọn: Ăn trưa")
         except:
-            print("! Không thấy nút ăn trưa (có thể form thay đổi?)")
+            print("[ERROR] Không tìm thấy nút Ăn trưa!")
 
-        time.sleep(1)
+        time.sleep(2)
 
-        # --- Gửi Form ---
-        # Tìm nút Gửi (Submit)
+        # === BƯỚC CUỐI: GỬI FORM ===
         try:
+            # Tìm nút có chữ Gửi
             submit_btn = driver.find_element(By.XPATH, "//button[contains(text(), 'Gửi')]")
             submit_btn.click()
-            print("=> ĐÃ BẤM GỬI!")
+            print("=> ĐÃ BẤM NÚT GỬI THÀNH CÔNG!")
         except:
-            # Phòng trường hợp tiếng Anh
             submit_btn = driver.find_element(By.XPATH, "//button[contains(text(), 'Submit')]")
             submit_btn.click()
-            print("=> ĐÃ BẤM SUBMIT!")
+            print("=> ĐÃ BẤM SUBMIT (Tiếng Anh)!")
         
-        # Chờ xác nhận
-        time.sleep(5)
-        print("Hoàn tất quy trình.")
+        time.sleep(5) # Chờ hệ thống ghi nhận
 
     except Exception as e:
-        print(f"Lỗi nghiêm trọng: {e}")
-        # Chụp màn hình lỗi để debug (xem trong Artifacts nếu cần - nâng cao)
+        print(f"[LỖI NGHIÊM TRỌNG]: {e}")
+        # In ra cấu trúc web để debug nếu cần
+        # print(driver.page_source) 
     finally:
         driver.quit()
 
 if __name__ == "__main__":
     if check_schedule():
         book_rice()
-    else:
-        print("Hôm nay nghỉ, tắt máy.")
