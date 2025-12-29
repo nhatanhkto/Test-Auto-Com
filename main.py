@@ -24,11 +24,27 @@ def get_vietnam_time():
     return vn_now.strftime("%d/%m/%Y")
 
 def check_schedule():
-    # Mở chức năng luôn chạy để test cho dễ
-    return True 
+    return True # Luôn chạy để test
+
+# HÀM MỚI: Cưỡng ép điền dữ liệu bằng JavaScript
+def force_fill(driver, element, value):
+    # Cách 1: Click và gõ thường
+    try:
+        element.click()
+        element.clear()
+        element.send_keys(value)
+    except:
+        pass
+    
+    # Cách 2: TIÊM DATA TRỰC TIẾP (Chống trượt)
+    # Lệnh này ép trình duyệt nhận giá trị ngay lập tức
+    driver.execute_script("arguments[0].value = arguments[1];", element, value)
+    # Báo cho web biết là "Tao vừa điền xong rồi đấy" (Trigger event)
+    driver.execute_script("arguments[0].dispatchEvent(new Event('input', { bubbles: true }));", element)
+    driver.execute_script("arguments[0].dispatchEvent(new Event('change', { bubbles: true }));", element)
 
 def book_rice():
-    print("--- CHẾ ĐỘ DEBUG: CHỤP ẢNH MÀN HÌNH ---")
+    print("--- CHẾ ĐỘ: FORCE FILL (TIÊM CODE) ---")
     chrome_options = Options()
     chrome_options.add_argument("--headless")
     chrome_options.add_argument("--no-sandbox")
@@ -51,18 +67,52 @@ def book_rice():
         except:
             driver.execute_script("window.scrollTo(0, 200)")
             driver.find_element(By.XPATH, "//span[contains(text(), '34 ĐCV')]").click()
-
         time.sleep(1)
 
-        # 2. Tên
-        driver.find_element(By.XPATH, "//div[contains(., 'Họ tên')]//input").send_keys(MY_NAME)
-        print(f"2. Điền tên: {MY_NAME}")
+        # ==========================================================
+        # PHẦN QUAN TRỌNG NHẤT: TÌM VÀ ĐIỀN TÊN (FORCE FILL)
+        # ==========================================================
+        
+        # Chiến thuật: Lấy tất cả các ô input text trên màn hình
+        print("Đang quét các ô nhập liệu...")
+        all_inputs = driver.find_elements(By.TAG_NAME, "input")
+        
+        # Lọc ra các ô input có thể nhập văn bản
+        text_inputs = []
+        for inp in all_inputs:
+            # Kiểm tra xem có phải ô nhập text không
+            if inp.get_attribute("type") in ["text", "email", "tel", ""] or inp.get_attribute("type") is None:
+                # Và phải đang hiển thị trên màn hình
+                if inp.is_displayed():
+                    text_inputs.append(inp)
 
-        # 3. Mã
-        driver.find_element(By.XPATH, "//div[contains(., 'Mã nhân viên')]//input").send_keys(MY_ID)
-        print(f"3. Điền mã: {MY_ID}")
+        print(f"Tìm thấy {len(text_inputs)} ô nhập liệu tiềm năng.")
 
-        time.sleep(1)
+        if len(text_inputs) >= 2:
+            # Ô đầu tiên chắc chắn là Tên
+            print("-> Đang cưỡng ép điền Tên...")
+            force_fill(driver, text_inputs[0], MY_NAME)
+            
+            # Ô thứ hai chắc chắn là Mã
+            print("-> Đang cưỡng ép điền Mã...")
+            force_fill(driver, text_inputs[1], MY_ID)
+        else:
+            # Nếu không tìm thấy theo kiểu danh sách, tìm theo Label cụ thể
+            print("(!) Không tìm thấy đủ ô, chuyển sang tìm theo Label...")
+            try:
+                inp_name = driver.find_element(By.XPATH, "//div[contains(., 'Họ tên')]//input")
+                force_fill(driver, inp_name, MY_NAME)
+            except: 
+                print("Lỗi tìm ô Tên")
+                
+            try:
+                inp_id = driver.find_element(By.XPATH, "//div[contains(., 'Mã nhân viên')]//input")
+                force_fill(driver, inp_id, MY_ID)
+            except:
+                print("Lỗi tìm ô Mã")
+
+        time.sleep(2)
+        # ==========================================================
 
         # 4. Xquang
         elem = driver.find_element(By.XPATH, "//span[contains(text(), 'Xquang')]")
@@ -89,20 +139,17 @@ def book_rice():
             btn.click()
             print("=> ĐÃ BẤM SUBMIT!")
         
-        # --- QUAN TRỌNG: CHỜ VÀ CHỤP ẢNH ---
         print("Đang chờ kết quả 10 giây...")
         time.sleep(10)
         
-        # CHỤP ẢNH MÀN HÌNH LẠI
         driver.save_screenshot("evidence.png")
-        print("=> ĐÃ CHỤP ẢNH MÀN HÌNH (evidence.png)")
+        print("=> ĐÃ CHỤP ẢNH MÀN HÌNH")
 
     except Exception as e:
         print(f"[LỖI]: {e}")
-        driver.save_screenshot("evidence.png") # Lỗi cũng chụp
+        driver.save_screenshot("evidence.png")
     finally:
         driver.quit()
 
 if __name__ == "__main__":
-    # Luôn chạy để test
     book_rice()
