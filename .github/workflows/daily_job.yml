@@ -2,10 +2,8 @@ name: Dang Ky Com Hang Ngay
 
 on:
   schedule:
-    # Chạy lúc 8:00 sáng VN (tức là 01:00 UTC)
-    # Dấu * * * nghĩa là chạy tất cả các ngày trong tháng/tuần
     - cron: '0 1 * * *'
-  workflow_dispatch: # Cho phép bấm chạy thủ công để test
+  workflow_dispatch:
 
 jobs:
   run-bot:
@@ -20,3 +18,11 @@ jobs:
         run: pip install -r requirements.txt
       - name: Run Auto Tool
         run: python main.py
+      
+      # --- THÊM ĐOẠN NÀY ĐỂ TẢI ẢNH VỀ ---
+      - name: Upload Screenshot
+        if: always() # Luôn chạy dù lỗi hay không
+        uses: actions/upload-artifact@v3
+        with:
+          name: bang-chung-chup-man-hinh
+          path: evidence.png
