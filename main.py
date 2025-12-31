@@ -14,10 +14,10 @@ from selenium.webdriver.support import expected_conditions as EC
 # CẤU HÌNH CHÍNH THỨC
 # ==============================================================================
 
-# 1. Link Google Sheet (Lịch làm việc)
+# 1. Link Google Sheet
 LINK_CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRGdoBQimFR-crsXdoqJmC-bk5PdlR4VYVRSTVGaXncW90ogVvS8zhIjfxDRHnlB3oKHGdXcSvL5IFd/pub?gid=0&single=true&output=csv'
 
-# 2. Link Form THẬT (Đã thay link của công ty vào đây)
+# 2. Link Form THẬT
 LINK_FORM = 'https://forms.office.com/r/ZjK2MqRCUw'
 
 # 3. Thông tin cá nhân
@@ -26,31 +26,39 @@ MY_ID = "BVHV00491"
 
 # ==============================================================================
 
-def get_vietnam_time():
-    utc_now = datetime.now(timezone.utc)
-    vn_now = utc_now + timedelta(hours=7)
-    return vn_now.strftime("%d/%m/%Y")
-
 def check_schedule():
-    print("--- 1. KIỂM TRA LỊCH TRÌNH (GOOGLE SHEET) ---")
+    print("--- 1. KIỂM TRA LỊCH TRÌNH (CHO NGÀY MAI) ---")
     try:
         response = requests.get(LINK_CSV)
         response.encoding = 'utf-8'
         lines = response.text.splitlines()
-        today_vn = get_vietnam_time()
-        print(f"Hôm nay là: {today_vn}")
+        
+        # Lấy giờ VN hiện tại
+        utc_now = datetime.now(timezone.utc)
+        vn_now = utc_now + timedelta(hours=7)
+        
+        # TÍNH NGÀY MAI (Cộng thêm 1 ngày)
+        tomorrow_vn = vn_now + timedelta(days=1)
+        
+        today_str = vn_now.strftime("%d/%m/%Y")
+        tomorrow_str = tomorrow_vn.strftime("%d/%m/%Y")
+        
+        print(f"Hôm nay là: {today_str}")
+        print(f"-> Đang check lịch cho NGÀY MAI: {tomorrow_str}")
         
         reader = csv.DictReader(lines)
         for row in reader:
-            if row['Ngay'] == today_vn:
+            # So sánh với ngày mai (tomorrow_str) thay vì hôm nay
+            if row['Ngay'] == tomorrow_str:
                 status = row['DiLam'].lower().strip()
                 if status == 'x' or status == 'co':
-                    print(f"-> Trạng thái '{status}' => CÓ ĐI LÀM. (Tiến hành chạy)")
+                    print(f"-> Kết quả: Ngày mai ({tomorrow_str}) CÓ LÀM => ĐĂNG KÝ NGAY.")
                     return True
                 else:
-                    print(f"-> Trạng thái '{status}' => NGHỈ. (Tắt máy)")
+                    print(f"-> Kết quả: Ngày mai ({tomorrow_str}) NGHỈ => KHÔNG ĐĂNG KÝ.")
                     return False
-        print("-> Không thấy ngày hôm nay trong lịch. Mặc định: NGHỈ.")
+                    
+        print(f"-> Không tìm thấy lịch của ngày mai ({tomorrow_str}) trong Excel. Mặc định: NGHỈ.")
         return False
     except Exception as e:
         print(f"Lỗi đọc lịch: {e}")
@@ -111,7 +119,7 @@ def hack_radio_button(driver, keyword):
         print(f"   [LỖI RADIO]: {e}")
 
 def book_rice():
-    print("--- 2. BẮT ĐẦU ĐIỀN FORM (LINK THẬT) ---")
+    print("--- 2. BẮT ĐẦU ĐIỀN FORM ---")
     chrome_options = Options()
     chrome_options.add_argument("--headless")
     chrome_options.add_argument("--no-sandbox")
@@ -167,7 +175,6 @@ def book_rice():
         print("Đang chờ kết quả 15 giây...")
         time.sleep(15)
         
-        # Vẫn giữ chế độ chụp ảnh để bạn kiểm tra hàng ngày cho yên tâm
         driver.save_screenshot("evidence.png")
         print("=> ĐÃ CHỤP ẢNH KẾT QUẢ.")
 
@@ -178,9 +185,8 @@ def book_rice():
         driver.quit()
 
 if __name__ == "__main__":
-    # KÍCH HOẠT CHẾ ĐỘ TỰ ĐỘNG
-    # Nó sẽ check Google Sheet trước, nếu 'x' mới chạy, nếu không thì tắt.
+    # Logic: Hôm nay chạy code -> Check xem NGÀY MAI có đi làm không -> Nếu có thì đăng ký
     if check_schedule():
         book_rice()
     else:
-        print("Hôm nay không có lịch đi làm. Kết thúc.")
+        print("Ngày mai được nghỉ (hoặc không có lịch). Robot tắt máy.")
