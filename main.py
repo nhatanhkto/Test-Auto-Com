@@ -26,6 +26,28 @@ MY_ID = "BVHV00491"
 
 # ==============================================================================
 
+def get_vietnam_time():
+    utc_now = datetime.now(timezone.utc)
+    vn_now = utc_now + timedelta(hours=7)
+    return vn_now
+
+# HÀM MỚI: CHUẨN HÓA NGÀY THÁNG ĐỂ SO SÁNH (6/1 sẽ bằng 06/01)
+def normalize_date(date_str):
+    try:
+        # Xóa khoảng trắng thừa
+        date_str = date_str.strip()
+        # Tách ngày, tháng, năm dựa trên dấu gạch chéo
+        parts = date_str.split('/')
+        if len(parts) == 3:
+            day = int(parts[0])   # Chuyển "06" thành số 6
+            month = int(parts[1]) # Chuyển "01" thành số 1
+            year = int(parts[2])  # 2026
+            # Trả về chuỗi chuẩn dạng số: "6/1/2026"
+            return f"{day}/{month}/{year}"
+        return date_str
+    except:
+        return date_str
+
 def check_schedule():
     print("--- 1. KIỂM TRA LỊCH TRÌNH (CHO NGÀY MAI) ---")
     try:
@@ -34,37 +56,50 @@ def check_schedule():
         lines = response.text.splitlines()
         
         # Lấy giờ VN hiện tại
-        utc_now = datetime.now(timezone.utc)
-        vn_now = utc_now + timedelta(hours=7)
+        vn_now = get_vietnam_time()
         
-        # TÍNH NGÀY MAI (Cộng thêm 1 ngày)
+        # TÍNH NGÀY MAI
         tomorrow_vn = vn_now + timedelta(days=1)
         
-        today_str = vn_now.strftime("%d/%m/%Y")
-        tomorrow_str = tomorrow_vn.strftime("%d/%m/%Y")
+        # Tạo ra 2 định dạng để tìm kiếm cho chắc ăn
+        tomorrow_str_full = tomorrow_vn.strftime("%d/%m/%Y") # Dạng 06/01/2026
+        tomorrow_str_short = f"{tomorrow_vn.day}/{tomorrow_vn.month}/{tomorrow_vn.year}" # Dạng 6/1/2026
         
-        print(f"Hôm nay là: {today_str}")
-        print(f"-> Đang check lịch cho NGÀY MAI: {tomorrow_str}")
+        print(f"Hôm nay là: {vn_now.strftime('%d/%m/%Y')}")
+        print(f"-> Đang tìm lịch cho NGÀY MAI ({tomorrow_str_full} hoặc {tomorrow_str_short})...")
         
         reader = csv.DictReader(lines)
+        found_date = False
+        
         for row in reader:
-            # So sánh với ngày mai (tomorrow_str) thay vì hôm nay
-            if row['Ngay'] == tomorrow_str:
+            csv_date_raw = row['Ngay']
+            # Chuẩn hóa cả 2 bên về dạng số để so sánh (6 == 06)
+            norm_csv_date = normalize_date(csv_date_raw)
+            norm_target_date = normalize_date(tomorrow_str_full)
+            
+            if norm_csv_date == norm_target_date:
+                found_date = True
                 status = row['DiLam'].lower().strip()
-                if status == 'x' or status == 'co':
-                    print(f"-> Kết quả: Ngày mai ({tomorrow_str}) CÓ LÀM => ĐĂNG KÝ NGAY.")
+                print(f"   [TÌM THẤY] Dòng trong Excel: '{csv_date_raw}' - Trạng thái: '{status}'")
+                
+                if status == 'x' or status == 'co' or status == 'có':
+                    print(f"=> KẾT LUẬN: Ngày mai CÓ LÀM. Tiến hành Đăng ký ngay.")
                     return True
                 else:
-                    print(f"-> Kết quả: Ngày mai ({tomorrow_str}) NGHỈ => KHÔNG ĐĂNG KÝ.")
+                    print(f"=> KẾT LUẬN: Ngày mai NGHỈ. Không đăng ký.")
                     return False
                     
-        print(f"-> Không tìm thấy lịch của ngày mai ({tomorrow_str}) trong Excel. Mặc định: NGHỈ.")
+        if not found_date:
+            print(f"-> LỖI: Đã duyệt hết file Excel mà không thấy ngày {tomorrow_str_full}.")
+            print("   (Hãy kiểm tra lại file Google Sheet xem đã điền ngày mai chưa?)")
+            
         return False
+
     except Exception as e:
         print(f"Lỗi đọc lịch: {e}")
         return False
 
-# HÀM: TIÊM DỮ LIỆU (HACK INPUT TEXT)
+# HÀM: TIÊM DỮ LIỆU
 def inject_text(driver, keywords, value):
     print(f"-> Đang điền '{value}'...")
     try:
@@ -80,7 +115,6 @@ def inject_text(driver, keywords, value):
             except: pass
         
         if not found:
-            # Dự phòng: Tìm theo thứ tự input text
             all_inputs = driver.find_elements(By.TAG_NAME, "input")
             text_inputs = [i for i in all_inputs if i.get_attribute("type") in ["text", "email", "", None] and i.is_displayed()]
             
@@ -94,18 +128,15 @@ def inject_text(driver, keywords, value):
     except Exception as e:
         print(f"   [LỖI ĐIỀN TEXT]: {e}")
 
-# HÀM: HACK RADIO BUTTON (CLICK BẤT CHẤP)
+# HÀM: HACK RADIO BUTTON
 def hack_radio_button(driver, keyword):
     print(f"-> Đang chọn: '{keyword}'...")
     try:
-        # Tìm mọi thứ chứa chữ khóa
         elements = driver.find_elements(By.XPATH, f"//*[contains(text(), '{keyword}')]")
         for elem in elements:
             try:
                 driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", elem)
-                # Click thẳng vào phần tử
                 driver.execute_script("arguments[0].click();", elem)
-                # Tìm input radio ẩn gần đó để click bồi thêm
                 try:
                     parent = elem.find_element(By.XPATH, "./..")
                     grandparent = elem.find_element(By.XPATH, "./../..")
@@ -153,7 +184,6 @@ def book_rice():
         hack_radio_button(driver, "ăn trưa") 
         hack_radio_button(driver, "Ăn trưa")
         
-        # KỸ THUẬT CUỐI: Tìm input radio trong div chứa chữ 'ăn trưa'
         try:
              target = driver.find_element(By.XPATH, "//div[contains(., 'ăn trưa')]")
              driver.execute_script("arguments[0].click();", target)
@@ -185,8 +215,7 @@ def book_rice():
         driver.quit()
 
 if __name__ == "__main__":
-    # Logic: Hôm nay chạy code -> Check xem NGÀY MAI có đi làm không -> Nếu có thì đăng ký
     if check_schedule():
         book_rice()
     else:
-        print("Ngày mai được nghỉ (hoặc không có lịch). Robot tắt máy.")
+        print("Kết thúc quy trình (Do ngày mai nghỉ hoặc không tìm thấy lịch).")
